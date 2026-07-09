@@ -1,14 +1,16 @@
 """
-Lightweight translation wrapper using deep-translator (free, no API key needed).
-Translates arbitrary text at request time — supports any language the person asks for,
-not a fixed set of pre-written translation files.
+Lightweight translation wrapper using deep-translator (free, no API key).
+Runs translations in parallel with a timeout per-call, so a single slow
+or failing request can't stall the whole batch.
 """
 from deep_translator import GoogleTranslator
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
 from functools import lru_cache
-from concurrent.futures import ThreadPoolExecutor
 
-# Small in-memory cache so repeated requests for the same text+language are instant
-@lru_cache(maxsize=2000)
+REQUEST_TIMEOUT_SECONDS = 4
+MAX_WORKERS = 16
+
+@lru_cache(maxsize=5000)
 def _translate_single(text: str, target_lang: str) -> str:
     if not text.strip():
         return text
@@ -16,15 +18,24 @@ def _translate_single(text: str, target_lang: str) -> str:
         return GoogleTranslator(source="auto", target=target_lang).translate(text)
     except Exception as e:
         print(f"Translation error for '{text[:40]}...' -> {target_lang}: {e}")
-        return text  # fail gracefully — show original text rather than break the UI
+        return text
+
+
+def _translate_with_timeout(text: str, target_lang: str) -> str:
+    with ThreadPoolExecutor(max_workers=1) as ex:
+        future = ex.submit(_translate_single, text, target_lang)
+        try:
+            return future.result(timeout=REQUEST_TIMEOUT_SECONDS)
+        except FutureTimeoutError:
+            print(f"Translation timed out for '{text[:40]}...' -> {target_lang}, returning original.")
+            return text
 
 
 def translate_batch(texts: list, target_lang: str) -> list:
-    """Translate a list of strings in parallel — much faster than one-by-one."""
     if target_lang == "en":
         return texts
-    with ThreadPoolExecutor(max_workers=8) as executor:
-        results = list(executor.map(lambda t: _translate_single(t, target_lang), texts))
+    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+        results = list(executor.map(lambda t: _translate_with_timeout(t, target_lang), texts))
     return results
 
 

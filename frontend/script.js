@@ -202,6 +202,7 @@ function tagTranslatableText(scope) {
   const selector =
     "h1, h2, h3, h4, p, span:not(.counter):not(.wordmark-dot), button, .footer-note, label";
   scope.querySelectorAll(selector).forEach((el) => {
+    if (el.closest("#diseasesGrid")) return; // translated lazily on card expand instead
     if (
       el.children.length === 0 &&
       el.textContent.trim().length > 1 &&
@@ -601,11 +602,23 @@ function renderDiseaseGrid(diseases) {
   `,
     )
     .join("");
-  grid
-    .querySelectorAll(".disease-card")
-    .forEach((card) =>
-      card.addEventListener("click", () => card.classList.toggle("expanded")),
-    );
+  grid.querySelectorAll(".disease-card").forEach((card) => {
+    card.addEventListener("click", async () => {
+      const wasExpanded = card.classList.contains("expanded");
+      card.classList.toggle("expanded");
+      if (!wasExpanded && currentLang !== "en" && !card.dataset.translated) {
+        card.dataset.translated = "1";
+        const textEls = card.querySelectorAll(
+          "h4, .disease-card-name, .disease-card-symptoms, li, p",
+        );
+        const originals = Array.from(textEls).map((el) => el.textContent);
+        const translated = await translateTexts(originals);
+        textEls.forEach((el, i) => {
+          el.textContent = translated[i];
+        });
+      }
+    });
+  });
 }
 
 // ============================================================

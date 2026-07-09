@@ -72,12 +72,12 @@ async def predict(file: UploadFile = File(...)):
 
     # Fold in cure/prevention info when we have a confident prediction
     if result.get("status") == "confident_prediction":
-        raw_class = pipeline.idx_to_class[
-            [k for k, v in pipeline.idx_to_class.items()
-             if pipeline._format_class_name(v) == result["predicted_class"]][0]
-        ]
-        result["disease_info"] = get_disease_info(raw_class)
-
+        matching_raw = next(
+            v for v in pipeline.idx_to_class.values()
+            if pipeline._format_class_name(v) == result["predicted_class"]
+        )
+        result["disease_info"] = get_disease_info(matching_raw)
+        
     return result
 
 
