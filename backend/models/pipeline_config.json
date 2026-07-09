@@ -1,0 +1,6 @@
+{
+  "img_size": 224,
+  "leaf_threshold": 0.5,
+  "disease_confidence_threshold": 0.44999999999999996,
+  "num_classes": 38
+}
